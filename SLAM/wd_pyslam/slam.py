@@ -23,68 +23,91 @@ K = np.array([[F, 0, W//2],
               [0, F, H//2], 
               [0, 0, 1]])
 
+frames = []
+points = []
+
 fe = FeatureExtractor(K)
 
 
 
 IRt = np.eye(4)
 
-frames = []
+# global map
+class Map(object):
+    def __init__(self):
+        self.frames = []
+        self.points = []
+
+    def display(self):
+        for f in self.frames:
+
+            print(f.pose)
+            # print(f.id)
+        for p in self.points:
+            print(p.xyz)
+   
+# def display_map():
+
+#     for f in frames:
+#         print(f.pose)
+#         print(f.id)
+#     # for p in points:
+#     #     print(p.xyz)
+
 
 class Point(object):
-    def __init__(self, loc):
+    # Observations
+    def __init__(self, mapp, loc):
         self.frames = []
         self.location = loc
-        self.idx = []
+        self.idxs = []
+
+        mapp.points.append(self)
+
     def add_observation(self, frame, idx):
         self.frames.append(frame)
-        self.idx.append(idx)
+        self.idxs.append(idx)
         
 
 def triangulation(pose1, pose2, pts1, pts2):
-    # reject the without enough parallax and behind the camera
-    pts4d = cv2.triangulatePoints(pose1[:3], pose2[:3, :], pts1.T, pts2.T).T
-    good_pts4d = (np.abs(pts4d[:, 3]) > 0.005) & (pts4d[:, 2] > 0.0)
-    pts4d = pts4d[good_pts4d]
+    return cv2.triangulatePoints(pose1[:3], pose2[:3, :], pts1.T, pts2.T).T
 
-    # homogenous coordinate
-    pts4d /= pts4d[:, 3:]    
-    return pts4d
-
-
+mapp = Map() 
 def process_frame(img):
     img = cv2.resize(img, (W, H))
-    
-    frame = Frame(img, K)
-    frames.append(frame)    
-    if len(frames) <= 1:
+    # mapp = Map() 
+
+    frame = Frame(mapp, img, K)
+    if frame.id == 0:
         return
-    kps1_idx, kps2_idx, Rt = match_frames(frames[-1], frames[-2])    
-    kps1 = frames[-1].kps[kps1_idx]
-    kps2 = frames[-2].kps[kps2_idx]
-    # Rt = Rt[:3, :]
-    # print(sum(Rt.diagonal()))
-    # print(frames[-1].pose.shape)
-    frames[-1].pose = np.dot(Rt, frames[-2].pose)
+
+    f1 = mapp.frames[-1]
+    f2 = mapp.frames[-2]
+
     
-    # # reject the without enough parallax
-    # pts4d = cv2.triangulatePoints(IRt[:3], Rt[:3, :], kps1.T, kps2.T).T
-    # good_pts4d = np.abs(pts4d[:, 3]) > 0.005
-    # pts4d = pts4d[good_pts4d]
+    kps1_idx, kps2_idx, Rt = match_frames(f1, f2)      
+    kps1 = f1.kps[kps1_idx]
+    kps2 = f2.kps[kps2_idx]   
+    f1.pose = np.dot(Rt, f2.pose)   
     
-    # # homogenous coordinate
-    # pts4d /= pts4d[:, 3:]
-    # # reject the behind the camera
-    
-    # good_pts4d = pts4d[:, 2] > 0.0
-    # pts4d = pts4d[good_pts4d]
+    ## Triangulation
     pts4d = triangulation(IRt, Rt, kps1, kps2)
+    good_pts4d = (np.abs(pts4d[:, 3]) > 0.0) & (pts4d[:, 2] > 0.0)
+    pts4d = pts4d[good_pts4d]
+    
+    # homogenous coordinate
+    pts4d /= pts4d[:, 3:]    
+    
+    f1.pose = np.dot(Rt, f2.pose)
 
     for i, p in enumerate(pts4d):
-        pt = Point(p)
-        pt.add_observation(frames[-1], kps1_idx[i])
-        pt.add_observation(frames[-2], kps2_idx[i])
-
+        
+        if not good_pts4d[i]:
+            return
+        pt = Point(mapp, p)
+        pt.add_observation(f1, kps1_idx[i])
+        pt.add_observation(f2, kps2_idx[i])
+    
     for p1, p2 in zip(kps1, kps2):
         u1, v1 = int(p1[0]), int(p1[1])
         u2, v2 = int(p2[0]), int(p2[1])
@@ -92,18 +115,10 @@ def process_frame(img):
         cv2.circle(img, (u1, v1), color = (0, 0, 255), radius=3)
         cv2.line(img, (u1, v1), (u2, v2), color = (255, 0, 0))
     cv2.imshow("image", img)
-
-    # pts, Rt = fe.extract(img)
-
-    # if Rt is None:
-    #     return
-    # for p1, p2 in pts:
-    #     u1, v1 = fe.denormalize(p1)
-    #     u2, v2 = fe.denormalize(p2)
-
-    #     cv2.circle(img, (u1, v1), color = (0, 0, 255), radius=3)
-    #     cv2.line(img, (u1, v1), (u2, v2), color = (255, 0, 0))
-    # cv2.imshow("image", img)
+    mapp.frames.append(frame)
+    
+    # display_map()
+    # Map().display()
 
 
 if __name__ == "__main__":
