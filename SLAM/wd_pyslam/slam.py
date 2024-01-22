@@ -23,6 +23,7 @@ F =190 # median value
 K = np.array([[F, 0, W//2], 
               [0, F, H//2], 
               [0, 0, 1]])
+K_inv = np.linalg.inv(K)
 
 frames = []
 points = []
@@ -70,7 +71,10 @@ class Map(object):
         # Define Projection and initial ModelView matrix
         self.scam = pangolin.OpenGlRenderState(
             pangolin.ProjectionMatrix(640, 480, 420, 420, 320, 240, 0.2, 100),
-            pangolin.ModelViewLookAt(-2, 2, -2, 0, 0, 0, pangolin.AxisDirection.AxisY))
+            pangolin.ModelViewLookAt(0, -10, -20, 
+                               0, 0, 0, 
+                               0, -1, 0)) 
+            # pangolin.ModelViewLookAt(-2, 2, -2, 0, 0, 0, pangolin.AxisDirection.AxisY))
         self.handler = pangolin.Handler3D(self.scam)
         
         # Create Interactive View in window
@@ -82,16 +86,22 @@ class Map(object):
         if self.state is None or q.empty():
             self.state = q.get()
         # turn state to points
-        ppts = np.array([d[:3, 3]for d in self.state[0]])
+        # ppts = np.array([d[:3, 3]for d in self.state[0]])
         spts = np.array(self.state[1])
+        
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
         gl.glClearColor(1.0, 1.0, 1.0, 1.0)
         self.dcam.Activate(self.scam)
 
-        gl.glPointSize(10)
-        gl.glColor3f(0.0, 1.0, 0.0)
+        gl.glColor3f(1.0, 0.0, 0.0)
+        pangolin.DrawCameras(self.state[0])
+        # for pose in self.state[0]:
+        #     pangolin.glDrawFrustrum(K_inv, 2, 2, pose, 1)
+
+        # gl.glPointSize(10)
+        # 
         
-        pangolin.DrawPoints(ppts)    
+        # pangolin.DrawPoints(ppts)    
         
         gl.glPointSize(2)
         gl.glColor3f(0.0, 1.0, 0.0)
@@ -128,7 +138,18 @@ class Point(object):
         
 
 def triangulation(pose1, pose2, pts1, pts2):
-    return cv2.triangulatePoints(pose1[:3], pose2[:3], pts1.T, pts2.T).T
+    ret = np.zeros((pts1.shape[0], 4))
+    pose1 = np.linalg.inv(pose1)
+    pose2 = np.linalg.inv(pose2)
+    for i, p in enumerate(zip(pts1, pts2)):
+        A = np.zeros((4,4))
+        A[0] = p[0][0] * pose1[2] - pose1[0]
+        A[1] = p[0][1] * pose1[2] - pose1[1]
+        A[2] = p[1][0] * pose2[2] - pose2[0]
+        A[3] = p[1][1] * pose2[2] - pose2[1]
+        _, _, vt = np.linalg.svd(A)
+        ret[i] = vt[3]
+    return ret
 
 mapp = Map() 
 def process_frame(img):
@@ -155,6 +176,7 @@ def process_frame(img):
     
     good_pts4d = (np.abs(pts4d[:, 3]) > 0.005) & (pts4d[:, 2] > 0.0)
     # pts4d = pts4d[good_pts4d]
+    print(len(pts4d))
     # good_pts4d = np.abs(pts4d[:, 3]) > 0.005
     # pts4d = pts4d[good_pts4d]
         # homogenous coordinate
@@ -174,7 +196,7 @@ def process_frame(img):
 
         cv2.circle(img, (u1, v1), color = (0, 0, 255), radius=3)
         cv2.line(img, (u1, v1), (u2, v2), color = (255, 0, 0))
-    # cv2.imshow("image", img)
+    cv2.imshow("image", img)
     mapp.frames.append(frame)
     
     # display_map()
