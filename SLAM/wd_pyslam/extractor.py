@@ -126,7 +126,7 @@ def match_frames(f1, f2):
   idx1s, idx2s = set(), set()
 
   for m,n in matches:
-    if m.distance < 0.75*n.distance:
+    if m.distance < 0.5*n.distance:
       p1 = f1.kps[m.queryIdx]
       p2 = f2.kps[m.trainIdx]
 
@@ -155,13 +155,13 @@ def match_frames(f1, f2):
                           EssentialMatrixTransform,
                             min_samples=8, 
                             residual_threshold=5, 
-                            max_trials=1000)
+                            max_trials=10)
   print("Matches:  %d -> %d -> %d -> %d" % (len(f1.des), len(matches), len(inliers), sum(inliers)))
   return idx1[inliers], idx2[inliers], fundamentalToRt(model.params)
 
 
 class Frame(object):
-  def __init__(self, img, K, pose=np.eye(4), tid=None, verts=None):
+  def __init__(self,mapp,  img, K, pose=np.eye(4), tid=None, verts=None):
     self.K = np.array(K)
     self.pose = np.array(pose)
 
@@ -177,5 +177,7 @@ class Frame(object):
       # fill in later
       self.h, self.w = 0, 0
       self.kps, self.des, self.pts = None, None, None
+    self.id = len(mapp.frames)
 
+    mapp.frames.append(self)
     # self.id = tid if tid is not None else mapp.add_frame(self)
