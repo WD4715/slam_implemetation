@@ -66,12 +66,12 @@ class Map(object):
         # params["position"] = (-500, -500)
 
 
-        pangolin.CreateWindowAndBind("Main", 640, 480, params)
+        pangolin.CreateWindowAndBind("Main", 256, 256, params)
         gl.glEnable(gl.GL_DEPTH_TEST)
         # Define Projection and initial ModelView matrix
         self.scam = pangolin.OpenGlRenderState(
             pangolin.ProjectionMatrix(640, 480, 420, 420, 320, 240, 0.2, 100),
-            pangolin.ModelViewLookAt(0, -10, -20, 
+            pangolin.ModelViewLookAt(0, 0, 20, 
                                0, 0, 0, 
                                0, -1, 0)) 
             # pangolin.ModelViewLookAt(-2, 2, -2, 0, 0, 0, pangolin.AxisDirection.AxisY))
@@ -103,7 +103,7 @@ class Map(object):
         
         # pangolin.DrawPoints(ppts)    
         
-        gl.glPointSize(2)
+        gl.glPointSize(4)
         gl.glColor3f(0.0, 1.0, 0.0)
         pangolin.DrawPoints(spts)    
 
@@ -172,14 +172,12 @@ def process_frame(img):
     ## Triangulation
     pts4d = triangulation(f1.pose, f2.pose, kps1, kps2)
     pts4d /= pts4d[:, 3:]    
-    # pts4d = - pts4d
     
     good_pts4d = (np.abs(pts4d[:, 3]) > 0.005) & (pts4d[:, 2] > 0.0)
-    # pts4d = pts4d[good_pts4d]
-    print(len(pts4d))
-    # good_pts4d = np.abs(pts4d[:, 3]) > 0.005
-    # pts4d = pts4d[good_pts4d]
-        # homogenous coordinate
+    pts4d = pts4d[good_pts4d]
+    if len(pts4d) == 0:
+        return
+
     f1.pose = np.dot(Rt, f2.pose)
 
     for i, p in enumerate(pts4d):
@@ -204,7 +202,7 @@ def process_frame(img):
 
 
 if __name__ == "__main__":
-    data_path = "/home/wondong/code/SLAM/wd_pyslam/data/front_undistorted_video.mp4"
+    data_path = "/home/wondong/code/SLAM/wd_pyslam/data/video.mp4"
     cap = cv2.VideoCapture(data_path)
     
     while cap.isOpened():
