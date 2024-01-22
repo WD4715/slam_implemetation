@@ -1,0 +1,8 @@
+g2o compile :
+    pyenv local 3.10.13
+    cmake -DPYTHON_EXECUTABLE=$(pyenv which python) -Wno-dev ..
+
+
+
+g2opy compile error 
+    : https://github.com/pybind/pybind11/issues/2058
