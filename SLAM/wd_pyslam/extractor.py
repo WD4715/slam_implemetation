@@ -21,6 +21,8 @@ class FeatureExtractor(object):
         self.K = K
         self.Kinv = np.linalg.inv(self.K)
 
+        self.f_est_avg = []
+
     def normalize(self, pts):
         return np.dot(self.Kinv, add_ones(pts).T).T[:, 0:2]
 
@@ -30,6 +32,26 @@ class FeatureExtractor(object):
         
         return int(round(ret[0])), int(round(ret[1]))
         # return int(round(pt[0] + self.w // 2)), int(round(pt[1] + self.h // 2))
+    def extractRt(self, E):
+                W = np.mat([[0, -1, 0], 
+                [1, 0, 0], 
+                [0, 0, 1]], dtype = float)
+
+                u, w, vt = np.linalg.svd(E)
+                if np.linalg.det(u) < 0:
+                    u *= -1.
+                if np.linalg.det(vt) < 0:
+                    vt *= -1.  
+                R = np.dot(np.dot(u, W), vt)
+                if np.sum(R.diagonal()) < 0:
+                    R = np.dot(np.dot(u, W.T), vt) 
+                t = u[:, 2].reshape(3, 1)
+
+                print(R.shape)
+                print(t.shape)
+                pose = np.concatenate([R, t], axis = 1)
+                
+                return pose
 
         
     def extract(self, img):
@@ -50,30 +72,41 @@ class FeatureExtractor(object):
                     kps1, kps2 = kps[m.queryIdx].pt, self.last['kps'][m.trainIdx].pt
                     ret.append((kps1, kps2))
         # filtering
+        pose = None
         if len(ret)> 0 :
 
             # normalization for fundamental matrix
             ret = np.array(ret)
-            print("ret shape")
-            print(ret[:, 0, :])
             ret[:, 0, :] = self.normalize(ret[:,0, :])
-            print(ret[:, 0, :])
             ret[:, 1, :] = self.normalize(ret[:,1, :])
 
 
             model, inlier = ransac((ret[:, 0], ret[:, 1]), 
-                                FundamentalMatrixTransform, 
+                                # FundamentalMatrixTransform, 
+                                EssentialMatrixTransform,
                                 min_samples=8, 
-                                residual_threshold=2., 
+                                residual_threshold=0.06, 
                                 max_trials=100)
             ret = ret[inlier]
+            
+            # rotation matrix check logic
+            pose = self.extractRt(model.params)
 
+            print("#"*50)
+            print("Rotation matrix : ")
+            print(np.sum(pose.diagonal()))
+            print(pose)
+            
 
+            # Focal length estimation
+            # s, v, d = np.linalg.svd(model.params)
+            # f_est = np.sqrt(2) / ((v[0] + v[1]) / 2)
+            # self.f_est_avg.append(f_est)
+            # print(f"f estimate : {f_est}, f_median{np.median(self.f_est_avg)}")
+            # print(f"f average value : {np.mean(self.f_est_avg)}")
 
-            s, v, d = np.linalg.svd(model.params)
-
-            print(f"SVD result : {v}")
+            # print(f"SVD result : {v}")
 
 
         self.last = {"kps" : kps, "des" : des}
-        return ret
+        return ret, pose
